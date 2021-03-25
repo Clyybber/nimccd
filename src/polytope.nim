@@ -100,9 +100,9 @@ proc deleteEdge*(pt: var Polytope, e: ptr PolytopeEdge) {.inline.} =
 proc deleteFace*(pt: var Polytope, f: ptr PolytopeFace) {.inline.} =
   # remove face from edges' recerence lists
   for i in 0..<3:
-      let e = f[].edge[i]
-      if e[].faces[0] == f: e[].faces[0] = e[].faces[1]
-      e[].faces[1] = nil
+    let e = f[].edge[i]
+    if e[].faces[0] == f: e[].faces[0] = e[].faces[1]
+    e[].faces[1] = nil
 
   # remove face from list of all faces
   delete(addr f[].list)
@@ -117,18 +117,18 @@ proc faceVec3*(face: ptr PolytopeFace, a, b, c: var ptr Vec3) {.inline.} =
   b = addr face[].edge[0][].vertex[1][].v.v
   c = if face[].edge[1][].vertex[0] != face[].edge[0][].vertex[0] and
          face[].edge[1][].vertex[0] != face[].edge[0][].vertex[1]:
-          addr face[].edge[1][].vertex[0][].v.v
+        addr face[].edge[1][].vertex[0][].v.v
       else:
-          addr face[].edge[1][].vertex[1][].v.v
+        addr face[].edge[1][].vertex[1][].v.v
 
 proc faceVertices(face: ptr PolytopeFace, a, b, c: var ptr PolytopeVertex) {.inline.} =
   a = face[].edge[0][].vertex[0]
   b = face[].edge[0][].vertex[1]
   c = if face[].edge[1][].vertex[0] != face[].edge[0][].vertex[0] and
          face[].edge[1][].vertex[0] != face[].edge[0][].vertex[1]:
-          face[].edge[1][].vertex[0]
+        face[].edge[1][].vertex[0]
       else:
-          face[].edge[1][].vertex[1]
+        face[].edge[1][].vertex[1]
 
 proc faceEdges*(f: ptr PolytopeFace, a, b, c: var ptr PolytopeEdge) {.inline.} =
   a = f[].edge[0]
@@ -149,14 +149,14 @@ proc edgeFaces*(e: ptr PolytopeEdge, f1, f2: var ptr PolytopeFace) {.inline.} =
 
 proc updateNearest(pt: var Polytope, el: ptr PolytopeElement) {.inline.} =
   if pt.nearest_dist =~ el[].dist:
-      if el[].typ < pt.nearest_type:
-          pt.nearest = el
-          pt.nearest_dist = el[].dist
-          pt.nearest_type = el[].typ
-  elif el[].dist < pt.nearest_dist:
+    if el[].typ < pt.nearest_type:
       pt.nearest = el
       pt.nearest_dist = el[].dist
       pt.nearest_type = el[].typ
+  elif el[].dist < pt.nearest_dist:
+    pt.nearest = el
+    pt.nearest_dist = el[].dist
+    pt.nearest_type = el[].typ
 
 from fenv import maximumPositiveValue
 proc renewNearest[R](pt: var Polytope[R]) =
@@ -165,13 +165,13 @@ proc renewNearest[R](pt: var Polytope[R]) =
   pt.nearest = nil
 
   forEachEntry(addr pt.vertices, v, PolytopeVertex[R], list):
-      updateNearest(pt, cast[ptr PolytopeElement[R]](v))
+    updateNearest(pt, cast[ptr PolytopeElement[R]](v))
 
   forEachEntry(addr pt.edges, e, PolytopeEdge[R], list):
-      updateNearest(pt, cast[ptr PolytopeElement[R]](e))
+    updateNearest(pt, cast[ptr PolytopeElement[R]](e))
 
   forEachEntry(addr pt.faces, f, PolytopeFace[R], list):
-      updateNearest(pt, cast[ptr PolytopeElement[R]](f))
+    updateNearest(pt, cast[ptr PolytopeElement[R]](f))
 
 proc initPolytope*[R](pt: var Polytope[R]) =
   initList(addr pt.vertices)
@@ -185,15 +185,15 @@ proc initPolytope*[R](pt: var Polytope[R]) =
 proc destroyPolytope*[R](pt: var Polytope[R]) =
   # first delete all faces
   forEachEntrySafe(addr pt.faces, f, f2, PolytopeFace[R], list):
-      deleteFace(pt, f)
+    deleteFace(pt, f)
 
   # delete all edges
   forEachEntrySafe(addr pt.edges, e, e2, PolytopeEdge[R], list):
-      deleteEdge(pt, e)
+    deleteEdge(pt, e)
 
   # delete all vertices
   forEachEntrySafe(addr pt.vertices, v, v2, PolytopeVertex[R], list):
-      deleteVertex(pt, v)
+    deleteVertex(pt, v)
 
 template ccdAlloc(typ): untyped = cast[ptr typ](c_malloc(sizeof(typ).csize_t))
 
@@ -262,16 +262,16 @@ proc addFace*[R](pt: var Polytope[R], e1, e2, e3: ptr PolytopeEdge[R]): ptr Poly
   let e = result[].edge[1]
   let c = if e[].vertex[0] != result[].edge[0][].vertex[0] and
              e[].vertex[0] != result[].edge[0][].vertex[1]:
-              e[].vertex[0][].v.v
+            e[].vertex[0][].v.v
           else:
-              e[].vertex[1][].v.v
+            e[].vertex[1][].v.v
   result[].dist = vec3PointTriangleDist2(origin(R), a, b, c, addr result[].witness)
 
   for i in 0..<3:
-      if result[].edge[i][].faces[0] == nil:
-          result[].edge[i][].faces[0] = result
-      else:
-          result[].edge[i][].faces[1] = result
+    if result[].edge[i][].faces[0] == nil:
+      result[].edge[i][].faces[0] = result
+    else:
+      result[].edge[i][].faces[1] = result
 
   append(addr pt.faces, addr result[].list)
 
@@ -281,26 +281,26 @@ proc addFace*[R](pt: var Polytope[R], e1, e2, e3: ptr PolytopeEdge[R]): ptr Poly
 proc recomputeDistances*(pt: var Polytope) =
   ## Recompute distances from origin for all elements in pt.
   forEachEntry(addr pt.vertices, v, PolytopeVertex, list):
-      v[].dist = length2(v[].v.v)
-      v[].witness = v[].v.v
+    v[].dist = length2(v[].v.v)
+    v[].witness = v[].v.v
 
   forEachEntry(addr pt.edges, e, PolytopeEdge, list):
-      let a = e[].vertex[0][].v.v
-      let b = e[].vertex[1][].v.v
-      e[].dist = vec3PointSegmentDist2(origin, a, b, addr e[].witness)
+    let a = e[].vertex[0][].v.v
+    let b = e[].vertex[1][].v.v
+    e[].dist = vec3PointSegmentDist2(origin, a, b, addr e[].witness)
 
   forEachEntry(addr pt.faces, f, PolytopeFace, list):
-      # obtain triplet of vertices
-      let a = f[].edge[0][].vertex[0][].v.v
-      let b = f[].edge[0][].vertex[1][].v.v
-      let e = f[].edge[1]
-      let c = if e[].vertex[0] != f[].edge[0][].vertex[0] and
-                 e[].vertex[0] != f[].edge[0][].vertex[1]:
-                  e[].vertex[0][].v.v
-              else:
-                  e[].vertex[1][].v.v
+    # obtain triplet of vertices
+    let a = f[].edge[0][].vertex[0][].v.v
+    let b = f[].edge[0][].vertex[1][].v.v
+    let e = f[].edge[1]
+    let c = if e[].vertex[0] != f[].edge[0][].vertex[0] and
+               e[].vertex[0] != f[].edge[0][].vertex[1]:
+              e[].vertex[0][].v.v
+            else:
+              e[].vertex[1][].v.v
 
-      f[].dist = vec3PointTriangleDist2(origin, a, b, c, addr f[].witness)
+    f[].dist = vec3PointTriangleDist2(origin, a, b, c, addr f[].witness)
 
 proc nearestToOrigin*[R](pt: var Polytope[R]): ptr PolytopeElement[R] =
   ## Returns nearest element to origin.
