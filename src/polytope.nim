@@ -19,58 +19,58 @@ import ccd, list
 from system/ansi_c import c_free, c_malloc
 
 type
-  ccd_pt_el_typ* = enum ccd_pt_vertex, ccd_pt_edge, ccd_pt_face
+  PolytopeElementKind* = enum peVertex, peEdge, peFace
   # XXX: These could be a case object, but that would increase memory consumption
-  ccd_pt_el_t*[R] = object
+  PolytopeElement*[R] = object
     ## General polytope element. Could be vertex, edge or triangle.
-    typ*: ccd_pt_el_typ     ## type of element
+    typ*: PolytopeElementKind     ## type of element
     dist*: R                ## distance from origin
     witness*: Vec3[R] ## witness point of projection of origin
-    list: ccd_list_t        ## list of elements of same type
+    list: DLList        ## list of elements of same type
 
-  ccd_pt_vertex_t*[R] = object
+  PolytopeVertex*[R] = object
     ## Polytope's vertex.
-    typ*: ccd_pt_el_typ
+    typ*: PolytopeElementKind
     dist*: R
     witness: Vec3[R]
-    list*: ccd_list_t
+    list*: DLList
 
     id: int
     v*: SupportPoints[R]
-    edges: ccd_list_t # List of edges
+    edges: DLList # List of edges
 
-  ccd_pt_edge_t*[R] = object
+  PolytopeEdge*[R] = object
     ## Polytope's edge.
-    typ*: ccd_pt_el_typ
+    typ*: PolytopeElementKind
     dist: R
     witness: Vec3[R]
-    list: ccd_list_t
+    list: DLList
 
-    vertex: array[2, ptr ccd_pt_vertex_t[R]] # Reference to vertices
-    faces: array[2, ptr ccd_pt_face_t[R]] # Reference to faces
+    vertex: array[2, ptr PolytopeVertex[R]] # Reference to vertices
+    faces: array[2, ptr PolytopeFace[R]] # Reference to faces
 
-    vertex_list: array[2, ccd_list_t] # List items in vertices' lists
+    vertex_list: array[2, DLList] # List items in vertices' lists
 
-  ccd_pt_face_t*[R] = object
+  PolytopeFace*[R] = object
     ## Polytope's triangle faces.
-    typ*: ccd_pt_el_typ
+    typ*: PolytopeElementKind
     dist: R
     witness: Vec3[R]
-    list: ccd_list_t
+    list: DLList
 
-    edge: array[3, ptr ccd_pt_edge_t[R]] # Reference to surrounding edges
+    edge: array[3, ptr PolytopeEdge[R]] # Reference to surrounding edges
 
-  ccd_pt_t*[R] = object
+  Polytope*[R] = object
     ## Struct containing polytope.
-    vertices*: ccd_list_t ## List of vertices
-    edges: ccd_list_t     ## List of edges
-    faces: ccd_list_t     ## List of faces
+    vertices*: DLList ## List of vertices
+    edges: DLList     ## List of edges
+    faces: DLList     ## List of faces
 
-    nearest: ptr ccd_pt_el_t[R]
+    nearest: ptr PolytopeElement[R]
     nearest_dist: R
-    nearest_type: ccd_pt_el_typ
+    nearest_type: PolytopeElementKind
 
-proc deleteVertex(pt: var ccd_pt_t, v: ptr ccd_pt_vertex_t) {.inline.} =
+proc deleteVertex(pt: var Polytope, v: ptr PolytopeVertex) {.inline.} =
   ## Deletes vertex from polytope. Returns 0 on success, -1 otherwise.
   # test if any edge is connected to this vertex
   if not isEmpty(addr v[].edges): return
@@ -82,7 +82,7 @@ proc deleteVertex(pt: var ccd_pt_t, v: ptr ccd_pt_vertex_t) {.inline.} =
 
   c_free(v)
 
-proc deleteEdge*(pt: var ccd_pt_t, e: ptr ccd_pt_edge_t) {.inline.} =
+proc deleteEdge*(pt: var Polytope, e: ptr PolytopeEdge) {.inline.} =
   # text if any face is connected to this edge (faces[] is always aligned to lower indices)
   if e[].faces[0] != nil: return
 
@@ -97,7 +97,7 @@ proc deleteEdge*(pt: var ccd_pt_t, e: ptr ccd_pt_edge_t) {.inline.} =
 
   c_free(e)
 
-proc deleteFace*(pt: var ccd_pt_t, f: ptr ccd_pt_face_t) {.inline.} =
+proc deleteFace*(pt: var Polytope, f: ptr PolytopeFace) {.inline.} =
   # remove face from edges' recerence lists
   for i in 0..<3:
       let e = f[].edge[i]
@@ -111,7 +111,7 @@ proc deleteFace*(pt: var ccd_pt_t, f: ptr ccd_pt_face_t) {.inline.} =
 
   c_free(f)
 
-proc faceVec3*(face: ptr ccd_pt_face_t, a, b, c: var ptr Vec3) {.inline.} =
+proc faceVec3*(face: ptr PolytopeFace, a, b, c: var ptr Vec3) {.inline.} =
   ## Returns vertices surrounding given triangle face.
   a = addr face[].edge[0][].vertex[0][].v.v
   b = addr face[].edge[0][].vertex[1][].v.v
@@ -121,7 +121,7 @@ proc faceVec3*(face: ptr ccd_pt_face_t, a, b, c: var ptr Vec3) {.inline.} =
       else:
           addr face[].edge[1][].vertex[1][].v.v
 
-proc faceVertices(face: ptr ccd_pt_face_t, a, b, c: var ptr ccd_pt_vertex_t) {.inline.} =
+proc faceVertices(face: ptr PolytopeFace, a, b, c: var ptr PolytopeVertex) {.inline.} =
   a = face[].edge[0][].vertex[0]
   b = face[].edge[0][].vertex[1]
   c = if face[].edge[1][].vertex[0] != face[].edge[0][].vertex[0] and
@@ -130,24 +130,24 @@ proc faceVertices(face: ptr ccd_pt_face_t, a, b, c: var ptr ccd_pt_vertex_t) {.i
       else:
           face[].edge[1][].vertex[1]
 
-proc faceEdges*(f: ptr ccd_pt_face_t, a, b, c: var ptr ccd_pt_edge_t) {.inline.} =
+proc faceEdges*(f: ptr PolytopeFace, a, b, c: var ptr PolytopeEdge) {.inline.} =
   a = f[].edge[0]
   b = f[].edge[1]
   c = f[].edge[2]
 
-proc edgeVec3*(e: ptr ccd_pt_edge_t, a, b: var ptr Vec3) {.inline.} =
+proc edgeVec3*(e: ptr PolytopeEdge, a, b: var ptr Vec3) {.inline.} =
   a = addr e[].vertex[0][].v.v
   b = addr e[].vertex[1][].v.v
 
-proc edgeVertices*(e: ptr ccd_pt_edge_t, a, b: var ptr ccd_pt_vertex_t) {.inline.} =
+proc edgeVertices*(e: ptr PolytopeEdge, a, b: var ptr PolytopeVertex) {.inline.} =
   a = e[].vertex[0]
   b = e[].vertex[1]
 
-proc edgeFaces*(e: ptr ccd_pt_edge_t, f1, f2: var ptr ccd_pt_face_t) {.inline.} =
+proc edgeFaces*(e: ptr PolytopeEdge, f1, f2: var ptr PolytopeFace) {.inline.} =
   f1 = e[].faces[0]
   f2 = e[].faces[1]
 
-proc updateNearest(pt: var ccd_pt_t, el: ptr ccd_pt_el_t) {.inline.} =
+proc updateNearest(pt: var Polytope, el: ptr PolytopeElement) {.inline.} =
   if pt.nearest_dist =~ el[].dist:
       if el[].typ < pt.nearest_type:
           pt.nearest = el
@@ -159,50 +159,50 @@ proc updateNearest(pt: var ccd_pt_t, el: ptr ccd_pt_el_t) {.inline.} =
       pt.nearest_type = el[].typ
 
 from fenv import maximumPositiveValue
-proc renewNearest[R](pt: var ccd_pt_t[R]) =
+proc renewNearest[R](pt: var Polytope[R]) =
   pt.nearest_dist = maximumPositiveValue(R)
-  pt.nearest_type = ccd_pt_face
+  pt.nearest_type = peFace
   pt.nearest = nil
 
-  forEachEntry(addr pt.vertices, v, ccd_pt_vertex_t[R], list):
-      updateNearest(pt, cast[ptr ccd_pt_el_t[R]](v))
+  forEachEntry(addr pt.vertices, v, PolytopeVertex[R], list):
+      updateNearest(pt, cast[ptr PolytopeElement[R]](v))
 
-  forEachEntry(addr pt.edges, e, ccd_pt_edge_t[R], list):
-      updateNearest(pt, cast[ptr ccd_pt_el_t[R]](e))
+  forEachEntry(addr pt.edges, e, PolytopeEdge[R], list):
+      updateNearest(pt, cast[ptr PolytopeElement[R]](e))
 
-  forEachEntry(addr pt.faces, f, ccd_pt_face_t[R], list):
-      updateNearest(pt, cast[ptr ccd_pt_el_t[R]](f))
+  forEachEntry(addr pt.faces, f, PolytopeFace[R], list):
+      updateNearest(pt, cast[ptr PolytopeElement[R]](f))
 
-proc initPolytope*[R](pt: var ccd_pt_t[R]) =
+proc initPolytope*[R](pt: var Polytope[R]) =
   initList(addr pt.vertices)
   initList(addr pt.edges)
   initList(addr pt.faces)
 
   pt.nearest = nil
   pt.nearest_dist = maximumPositiveValue(R)
-  pt.nearest_type = ccd_pt_face
+  pt.nearest_type = peFace
 
-proc destroyPolytope*[R](pt: var ccd_pt_t[R]) =
+proc destroyPolytope*[R](pt: var Polytope[R]) =
   # first delete all faces
-  forEachEntrySafe(addr pt.faces, f, f2, ccd_pt_face_t[R], list):
+  forEachEntrySafe(addr pt.faces, f, f2, PolytopeFace[R], list):
       deleteFace(pt, f)
 
   # delete all edges
-  forEachEntrySafe(addr pt.edges, e, e2, ccd_pt_edge_t[R], list):
+  forEachEntrySafe(addr pt.edges, e, e2, PolytopeEdge[R], list):
       deleteEdge(pt, e)
 
   # delete all vertices
-  forEachEntrySafe(addr pt.vertices, v, v2, ccd_pt_vertex_t[R], list):
+  forEachEntrySafe(addr pt.vertices, v, v2, PolytopeVertex[R], list):
       deleteVertex(pt, v)
 
 template ccdAlloc(typ): untyped = cast[ptr typ](c_malloc(sizeof(typ).csize_t))
 
-proc addVertex*[R](pt: var ccd_pt_t[R], v: SupportPoints[R]): ptr ccd_pt_vertex_t[R] =
+proc addVertex*[R](pt: var Polytope[R], v: SupportPoints[R]): ptr PolytopeVertex[R] =
   ## Adds vertex to polytope and returns pointer to newly created vertex.
-  result = ccdAlloc(ccd_pt_vertex_t[R])
+  result = ccdAlloc(PolytopeVertex[R])
   if result == nil: return nil
 
-  result[].typ = ccd_pt_vertex
+  result[].typ = peVertex
   result[].v = v
 
   result[].dist = length2(result[].v.v)
@@ -214,19 +214,19 @@ proc addVertex*[R](pt: var ccd_pt_t[R], v: SupportPoints[R]): ptr ccd_pt_vertex_
   append(addr pt.vertices, addr result[].list)
 
   # update position in .nearest array
-  updateNearest(pt, cast[ptr ccd_pt_el_t[R]](result))
+  updateNearest(pt, cast[ptr PolytopeElement[R]](result))
 
-proc addVertexCoords[R](pt: var ccd_pt_t[R], x, y, z: R): ptr ccd_pt_vertex_t[R] {.inline.} =
+proc addVertexCoords[R](pt: var Polytope[R], x, y, z: R): ptr PolytopeVertex[R] {.inline.} =
   addVertex(pt, SupportPoints(v: vec3(x, y, z)))
 
-proc addEdge*[R](pt: var ccd_pt_t[R], v1, v2: ptr ccd_pt_vertex_t[R]): ptr ccd_pt_edge_t[R] =
+proc addEdge*[R](pt: var Polytope[R], v1, v2: ptr PolytopeVertex[R]): ptr PolytopeEdge[R] =
   ## Adds edge to polytope.
   if v1 == nil or v2 == nil: return nil
 
-  result = ccdAlloc(ccd_pt_edge_t[R])
+  result = ccdAlloc(PolytopeEdge[R])
   if result == nil: return nil
 
-  result[].typ = ccd_pt_edge
+  result[].typ = peEdge
   result[].vertex[0] = v1
   result[].vertex[1] = v2
   result[].faces[1] = nil
@@ -242,16 +242,16 @@ proc addEdge*[R](pt: var ccd_pt_t[R], v1, v2: ptr ccd_pt_vertex_t[R]): ptr ccd_p
   append(addr pt.edges, addr result[].list)
 
   # update position in .nearest array
-  updateNearest(pt, cast[ptr ccd_pt_el_t[R]](result))
+  updateNearest(pt, cast[ptr PolytopeElement[R]](result))
 
-proc addFace*[R](pt: var ccd_pt_t[R], e1, e2, e3: ptr ccd_pt_edge_t[R]): ptr ccd_pt_face_t[R] =
+proc addFace*[R](pt: var Polytope[R], e1, e2, e3: ptr PolytopeEdge[R]): ptr PolytopeFace[R] =
   ## Adds face to polytope.
   if e1 == nil or e2 == nil or e3 == nil: return nil
 
-  result = ccdAlloc(ccd_pt_face_t[R])
+  result = ccdAlloc(PolytopeFace[R])
   if result == nil: return nil
 
-  result[].typ = ccd_pt_face
+  result[].typ = peFace
   result[].edge[0] = e1
   result[].edge[1] = e2
   result[].edge[2] = e3
@@ -276,20 +276,20 @@ proc addFace*[R](pt: var ccd_pt_t[R], e1, e2, e3: ptr ccd_pt_edge_t[R]): ptr ccd
   append(addr pt.faces, addr result[].list)
 
   # update position in .nearest array
-  updateNearest(pt, cast[ptr ccd_pt_el_t[R]](result))
+  updateNearest(pt, cast[ptr PolytopeElement[R]](result))
 
-proc recomputeDistances*(pt: var ccd_pt_t) =
+proc recomputeDistances*(pt: var Polytope) =
   ## Recompute distances from origin for all elements in pt.
-  forEachEntry(addr pt.vertices, v, ccd_pt_vertex_t, list):
+  forEachEntry(addr pt.vertices, v, PolytopeVertex, list):
       v[].dist = length2(v[].v.v)
       v[].witness = v[].v.v
 
-  forEachEntry(addr pt.edges, e, ccd_pt_edge_t, list):
+  forEachEntry(addr pt.edges, e, PolytopeEdge, list):
       let a = e[].vertex[0][].v.v
       let b = e[].vertex[1][].v.v
       e[].dist = vec3PointSegmentDist2(origin, a, b, addr e[].witness)
 
-  forEachEntry(addr pt.faces, f, ccd_pt_face_t, list):
+  forEachEntry(addr pt.faces, f, PolytopeFace, list):
       # obtain triplet of vertices
       let a = f[].edge[0][].vertex[0][].v.v
       let b = f[].edge[0][].vertex[1][].v.v
@@ -302,7 +302,7 @@ proc recomputeDistances*(pt: var ccd_pt_t) =
 
       f[].dist = vec3PointTriangleDist2(origin, a, b, c, addr f[].witness)
 
-proc nearestToOrigin*[R](pt: var ccd_pt_t[R]): ptr ccd_pt_el_t[R] =
+proc nearestToOrigin*[R](pt: var Polytope[R]): ptr PolytopeElement[R] =
   ## Returns nearest element to origin.
   if pt.nearest == nil: renewNearest(pt)
   return pt.nearest

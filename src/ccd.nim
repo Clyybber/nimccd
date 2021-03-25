@@ -268,32 +268,32 @@ func initCCD*[T, R](): CCDObj[T, R] =
               max_iterations: uint64.high,
               epa_tolerance: 0.0001, mpr_tolerance: 0.0001)
 
-proc penEPAPos[R](pt: ccd_pt_t[R], nearest: ptr ccd_pt_el_t[R], pos: var Vec3[R]) =
+proc penEPAPos[R](pt: Polytope[R], nearest: ptr PolytopeElement[R], pos: var Vec3[R]) =
   # compute median
   var len: csize_t = 0
-  forEachEntry(unsafeAddr pt.vertices, v, ccd_pt_vertex_t[R], list):
+  forEachEntry(unsafeAddr pt.vertices, v, PolytopeVertex[R], list):
     inc len
 
   template ccdAllocArr(typ, num_elements): untyped = cast[ptr typ](c_malloc(sizeof(typ).csize_t * num_elements))
 
-  let vs = cast[ptr UncheckedArray[ptr ccd_pt_vertex_t[R]]](ccdAllocArr(ptr ccd_pt_vertex_t[R], len))
+  let vs = cast[ptr UncheckedArray[ptr PolytopeVertex[R]]](ccdAllocArr(ptr PolytopeVertex[R], len))
   if vs == nil: quit "Memory alloc failure"
 
   var i: csize_t = 0
-  forEachEntry(unsafeAddr pt.vertices, v, ccd_pt_vertex_t[R], list):
+  forEachEntry(unsafeAddr pt.vertices, v, PolytopeVertex[R], list):
     vs[i] = v
     inc i
 
   proc qsort(base: pointer, nitems: csize_t, size: csize_t, compar: proc (a, b: pointer): int {.cdecl.}) {.nodecl, importc: "qsort".}
 
   proc penEPAPosCmp(a, b: pointer): int {.cdecl.} =
-    let v1 = cast[ptr ptr ccd_pt_vertex_t[R]](a)[]
-    let v2 = cast[ptr ptr ccd_pt_vertex_t[R]](b)[]
+    let v1 = cast[ptr ptr PolytopeVertex[R]](a)[]
+    let v2 = cast[ptr ptr PolytopeVertex[R]](b)[]
     if v1[].dist =~ v2[].dist: 0
     elif v1[].dist < v2[].dist: -1
     else: 1
 
-  qsort(vs, len, sizeof(ptr ccd_pt_vertex_t).csize_t, penEPAPosCmp)
+  qsort(vs, len, sizeof(ptr PolytopeVertex).csize_t, penEPAPosCmp)
 
   pos = vec3[R](0, 0, 0)
   var scale: R = 0
@@ -514,9 +514,9 @@ proc intersectGJK*[T, R](obj1, obj2: T, ccd: CCDObj[T, R]): bool =
   ## Returns true if two given objects interest.
   GJK(obj1, obj2, ccd, (var simplex: Simplex[R]; simplex)) == true
 
-proc nextSupport[T, R](obj1, obj2: T, ccd: CCDObj[T, R], el: ptr ccd_pt_el_t[R], next: var SupportPoints[R]): bool =
+proc nextSupport[T, R](obj1, obj2: T, ccd: CCDObj[T, R], el: ptr PolytopeElement[R], next: var SupportPoints[R]): bool =
   ## Finds next support point (and stores it in `next`). Returns true on success, false otherwise
-  if el[].typ == ccd_pt_vertex: return false
+  if el[].typ == peVertex: return false
 
   # touch contact
   if isZero(el[].dist): return false
@@ -530,15 +530,15 @@ proc nextSupport[T, R](obj1, obj2: T, ccd: CCDObj[T, R], el: ptr ccd_pt_el_t[R],
   if dist - el[].dist < ccd.epa_tolerance: return false
 
   var a, b, c: ptr Vec3[R]
-  if el[].typ == ccd_pt_edge:
+  if el[].typ == peEdge:
     # fetch end points of edge
-    edgeVec3(cast[ptr ccd_pt_edge_t[R]](el), a, b)
+    edgeVec3(cast[ptr PolytopeEdge[R]](el), a, b)
 
     # get distance from segment
     dist = vec3PointSegmentDist2(next.v, a[], b[], nil)
-  else: # el->type == ccd_pt_face
+  else: # el->type == peFace
     # fetch vertices of triangle face
-    faceVec3(cast[ptr ccd_pt_face_t[R]](el), a, b, c)
+    faceVec3(cast[ptr PolytopeFace[R]](el), a, b, c)
 
     # check if new point can significantly expand polytope
     dist = vec3PointTriangleDist2(next.v, a[], b[], c[], nil)
@@ -547,14 +547,14 @@ proc nextSupport[T, R](obj1, obj2: T, ccd: CCDObj[T, R], el: ptr ccd_pt_el_t[R],
 
   return true
 
-proc expandPolytope[R](pt: var ccd_pt_t[R], el: ptr ccd_pt_el_t[R], newv: SupportPoints[R]) =
+proc expandPolytope[R](pt: var Polytope[R], el: ptr PolytopeElement[R], newv: SupportPoints[R]) =
   ## Expands polytope('s tri) by new vertex v. Triangle tri is replaced by three triangles each with one vertex in v.
-  var v: array[5, ptr ccd_pt_vertex_t[R]]
-  var e: array[8, ptr ccd_pt_edge_t[R]]
-  var f: array[2, ptr ccd_pt_face_t[R]]
+  var v: array[5, ptr PolytopeVertex[R]]
+  var e: array[8, ptr PolytopeEdge[R]]
+  var f: array[2, ptr PolytopeFace[R]]
 
   # element can be either segment or triangle
-  if el[].typ == ccd_pt_edge:
+  if el[].typ == peEdge:
     # In this case, segment should be replaced by new point.
     # Simpliest case is when segment stands alone and in this case
     # this segment is replaced by two other segments both connected to
@@ -565,15 +565,15 @@ proc expandPolytope[R](pt: var ccd_pt_t[R], el: ptr ccd_pt_el_t[R], newv: Suppor
     # vertices which is exactly what is done in following code.
     #
 
-    edgeVertices(cast[ptr ccd_pt_edge_t[R]](el), v[0], v[2])
+    edgeVertices(cast[ptr PolytopeEdge[R]](el), v[0], v[2])
 
-    edgeFaces(cast[ptr ccd_pt_edge_t[R]](el), f[0], f[1])
+    edgeFaces(cast[ptr PolytopeEdge[R]](el), f[0], f[1])
 
     if f[0] != nil:
       faceEdges(f[0], e[0], e[1], e[2])
-      if e[0] == cast[ptr ccd_pt_edge_t[R]](el):
+      if e[0] == cast[ptr PolytopeEdge[R]](el):
         e[0] = e[2]
-      elif e[1] == cast[ptr ccd_pt_edge_t[R]](el):
+      elif e[1] == cast[ptr PolytopeEdge[R]](el):
         e[1] = e[2]
 
       edgeVertices(e[0], v[1], v[3])
@@ -589,9 +589,9 @@ proc expandPolytope[R](pt: var ccd_pt_t[R], el: ptr ccd_pt_el_t[R], newv: Suppor
 
       if f[1] != nil:
         faceEdges(f[1], e[2], e[3], e[4])
-        if e[2] == cast[ptr ccd_pt_edge_t[R]](el):
+        if e[2] == cast[ptr PolytopeEdge[R]](el):
           e[2] = e[4]
-        elif e[3] == cast[ptr ccd_pt_edge_t[R]](el):
+        elif e[3] == cast[ptr PolytopeEdge[R]](el):
           e[3] = e[4]
         edgeVertices(e[2], v[3], v[4])
         if v[3] != v[2] and v[4] != v[2]:
@@ -610,7 +610,7 @@ proc expandPolytope[R](pt: var ccd_pt_t[R], el: ptr ccd_pt_el_t[R], newv: Suppor
       deleteFace(pt, f[0])
       if f[1] != nil:
         deleteFace(pt, f[1])
-        deleteEdge(pt, cast[ptr ccd_pt_edge_t[R]](el))
+        deleteEdge(pt, cast[ptr PolytopeEdge[R]](el))
 
       e[4] = addEdge(pt, v[4], v[2])
       e[5] = addEdge(pt, v[4], v[0])
@@ -626,14 +626,14 @@ proc expandPolytope[R](pt: var ccd_pt_t[R], el: ptr ccd_pt_el_t[R], newv: Suppor
         if addFace(pt, e[3], e[5], e[7]) == nil or addFace(pt, e[4], e[7], e[2]) == nil:
           quit "Memory alloc failure"
       else:
-        if addFace(pt, e[4], e[5], cast[ptr ccd_pt_edge_t[R]](el)) == nil:
+        if addFace(pt, e[4], e[5], cast[ptr PolytopeEdge[R]](el)) == nil:
           quit "Memory alloc failure"
-  else: # el->type == ccd_pt_face
+  else: # el->type == peFace
     # replace triangle by tetrahedron without base (base would be the
     # triangle that will be removed)
 
     # get triplet of surrounding edges and vertices of triangle face
-    faceEdges(cast[ptr ccd_pt_face_t[R]](el), e[0], e[1], e[2])
+    faceEdges(cast[ptr PolytopeFace[R]](el), e[0], e[1], e[2])
     edgeVertices(e[0], v[0], v[1])
     edgeVertices(e[1], v[2], v[3])
 
@@ -648,7 +648,7 @@ proc expandPolytope[R](pt: var ccd_pt_t[R], el: ptr ccd_pt_el_t[R], newv: Suppor
       v[2] = v[3]
 
     # remove triangle face
-    deleteFace(pt, cast[ptr ccd_pt_face_t[R]](el))
+    deleteFace(pt, cast[ptr PolytopeFace[R]](el))
 
     # expand triangle to tetrahedron
     v[3] = addVertex(pt, newv)
@@ -661,7 +661,7 @@ proc expandPolytope[R](pt: var ccd_pt_t[R], el: ptr ccd_pt_el_t[R], newv: Suppor
        addFace(pt, e[5], e[3], e[2]) == nil:
       quit "Memory alloc failure"
 
-proc simplexToPolytope3[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Simplex[R], pt: var ccd_pt_t[R], nearest: var ptr ccd_pt_el_t[R]): bool =
+proc simplexToPolytope3[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Simplex[R], pt: var Polytope[R], nearest: var ptr PolytopeElement[R]): bool =
   ## Transforms simplex to polytope, three vertices required
   nearest = nil
 
@@ -685,8 +685,8 @@ proc simplexToPolytope3[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Sim
   computeSupportPoints(obj1, obj2, -dir, ccd, d2)
   let dist2 = vec3PointTriangleDist2(d2.v, a.v, b.v, c.v, nil)
 
-  var v: array[5, ptr ccd_pt_vertex_t[R]]
-  var e: array[9, ptr ccd_pt_edge_t[R]]
+  var v: array[5, ptr PolytopeVertex[R]]
+  var e: array[9, ptr PolytopeEdge[R]]
   # check if face isn't already on edge of minkowski sum and thus we have touching contact
   if isZero(dist) or isZero(dist2):
     v[0] = addVertex(pt, a)
@@ -695,7 +695,7 @@ proc simplexToPolytope3[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Sim
     e[0] = addEdge(pt, v[0], v[1])
     e[1] = addEdge(pt, v[1], v[2])
     e[2] = addEdge(pt, v[2], v[0])
-    nearest = cast[ptr ccd_pt_el_t[R]](addFace(pt, e[0], e[1], e[2]))
+    nearest = cast[ptr PolytopeElement[R]](addFace(pt, e[0], e[1], e[2]))
     if nearest == nil: quit "Memory alloc failure"
 
     return false
@@ -729,7 +729,7 @@ proc simplexToPolytope3[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Sim
 
   return true
 
-proc simplexToPolytope4[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Simplex[R], pt: var ccd_pt_t[R], nearest: var ptr ccd_pt_el_t[R]): bool =
+proc simplexToPolytope4[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Simplex[R], pt: var Polytope[R], nearest: var ptr PolytopeElement[R]): bool =
   ## Transforms simplex to polytope. It is assumed that simplex has 4 vertices!
   let a = simplex[0]
   let b = simplex[1]
@@ -761,11 +761,11 @@ proc simplexToPolytope4[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Sim
     return simplexToPolytope3(obj1, obj2, ccd, simplex, pt, nearest)
 
   # no touching contact - simply create tetrahedron
-  var v: array[4, ptr ccd_pt_vertex_t[R]]
+  var v: array[4, ptr PolytopeVertex[R]]
   for i in 0..<4:
     v[i] = addVertex(pt, simplex[i])
 
-  var e: array[6, ptr ccd_pt_edge_t[R]]
+  var e: array[6, ptr PolytopeEdge[R]]
   e[0] = addEdge(pt, v[0], v[1])
   e[1] = addEdge(pt, v[1], v[2])
   e[2] = addEdge(pt, v[2], v[0])
@@ -785,7 +785,7 @@ proc simplexToPolytope4[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Sim
 
   return true
 
-proc simplexToPolytope2[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Simplex[R], pt: var ccd_pt_t[R], nearest: var ptr ccd_pt_el_t[R]): bool =
+proc simplexToPolytope2[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Simplex[R], pt: var Polytope[R], nearest: var ptr PolytopeElement[R]): bool =
   ## Transforms simplex to polytope, two vertices required
   let a = simplex[0]
   let b = simplex[1]
@@ -805,8 +805,8 @@ proc simplexToPolytope2[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Sim
     if not (a.v =~ supp[0].v) and not (b.v =~ supp[0].v):
       found = true; break
 
-  var v: array[6, ptr ccd_pt_vertex_t[R]]
-  var e: array[12, ptr ccd_pt_edge_t[R]]
+  var v: array[6, ptr PolytopeVertex[R]]
+  var e: array[12, ptr PolytopeEdge[R]]
   block simplexToPolytope2_not_touching_contact:
     block simplexToPolytope2_touching_contact:
       if not found: break simplexToPolytope2_touching_contact
@@ -827,7 +827,7 @@ proc simplexToPolytope2[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Sim
       break simplexToPolytope2_not_touching_contact
     v[0] = addVertex(pt, a)
     v[1] = addVertex(pt, b)
-    nearest = cast[ptr ccd_pt_el_t[R]](addEdge(pt, v[0], v[1]))
+    nearest = cast[ptr PolytopeElement[R]](addEdge(pt, v[0], v[1]))
     if nearest == nil: quit "Memory alloc failure"
 
     return false
@@ -867,7 +867,7 @@ proc simplexToPolytope2[T, R](obj1, obj2: T, ccd: CCDObj[T, R], simplex: var Sim
 
   return true
 
-proc GJKEPA[T, R](obj1, obj2: T, ccd: CCDObj[T, R], polytope: var ccd_pt_t[R], nearest: var ptr ccd_pt_el_t[R]): bool =
+proc GJKEPA[T, R](obj1, obj2: T, ccd: CCDObj[T, R], polytope: var Polytope[R], nearest: var ptr PolytopeElement[R]): bool =
   ## Performs GJK+EPA algorithm. Returns 0 if intersection was found and
   ## pt is filled with resulting polytope and nearest with pointer to
   ## nearest element (vertex, edge, face) of polytope to origin.
@@ -910,10 +910,10 @@ proc penetrationGJK*[T, R](obj1, obj2: T, ccd: CCDObj[T, R], depth: var R, dir, 
   ## Returns true if obj1 and obj2 intersect and depth, dir and pos are filled
   ## if given non-NULL pointers.
   ## If obj1 and obj2 don't intersect false is returned.
-  var polytope: ccd_pt_t[R]
+  var polytope: Polytope[R]
   initPolytope(polytope)
 
-  var nearest: ptr ccd_pt_el_t[R]
+  var nearest: ptr PolytopeElement[R]
   result = GJKEPA(obj1, obj2, ccd, polytope, nearest)
 
   # set separation vector
@@ -936,10 +936,10 @@ proc separateGJK*[T, R](obj1, obj2: T, ccd: CCDObj[T, R], sep: var Vec3[R]): boo
   ## (without intersection).
   ## Returns true if obj1 and obj2 intersect and sep is filled with translation
   ## vector. If obj1 and obj2 don't intersect false is returned.
-  var polytope: ccd_pt_t[R]
+  var polytope: Polytope[R]
   initPolytope(polytope)
 
-  var nearest: ptr ccd_pt_el_t[R]
+  var nearest: ptr PolytopeElement[R]
   result = GJKEPA(obj1, obj2, ccd, polytope, nearest)
 
   # set separation vector

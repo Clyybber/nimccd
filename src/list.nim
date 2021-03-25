@@ -17,7 +17,7 @@
 
 # __prefetch(x)  - prefetches the cacheline at "x" for read
 # __prefetchw(x) - prefetches the cacheline at "x" for write
-template ccd_prefetch*(x) = discard
+template prefetch*(x) = discard # TODO
   #when __GNUC__
   #  define _ccd_prefetch(x) __builtin_prefetch(x)
   #  define _ccd_prefetchw(x) __builtin_prefetch(x,1)
@@ -25,11 +25,11 @@ template ccd_prefetch*(x) = discard
   #  define _ccd_prefetch(x) ((void)0)
   #  define _ccd_prefetchw(x) ((void)0)
 
-type ccd_list_t* = object
-  next*, prev*: ptr ccd_list_t
+type DLList* = object
+  next*, prev*: ptr DLList
 
 template entry(
-    p,     # the &ccd_list_t pointer.
+    p,     # the &DLList pointer.
     typ,   # the type of the struct this is embedded in.
     member # the name of the list_struct within the struct.
   ): untyped =
@@ -45,7 +45,7 @@ template forEachEntry*(
   ## Iterates over list of given type.
   block:
     var pos = entry(head[].next, postype, member)
-    while (ccd_prefetch(pos[].member.next); (addr pos[].member) != head):
+    while (prefetch(pos[].member.next); (addr pos[].member) != head):
       XXX
       pos = entry(pos[].member.next, postype, member)
 
@@ -64,23 +64,23 @@ template forEachEntrySafe*(
       XXX
       pos = n; n = entry(n[].member.next, postype, member)
 
-proc initList*(l: ptr ccd_list_t) {.inline.} =
+proc initList*(l: ptr DLList) {.inline.} =
   ## Initialize list.
   l[].next = l
   l[].prev = l
 
-proc isEmpty*(head: ptr ccd_list_t): bool {.inline.} =
+proc isEmpty*(head: ptr DLList): bool {.inline.} =
   ## Returns true if list is empty.
   head[].next == head
 
-proc append*(l, new: ptr ccd_list_t) {.inline.} =
+proc append*(l, new: ptr DLList) {.inline.} =
   ## Appends item to end of the list l.
   new[].prev = l[].prev
   new[].next = l
   l[].prev[].next = new
   l[].prev = new
 
-proc delete*(item: ptr ccd_list_t) {.inline.} =
+proc delete*(item: ptr DLList) {.inline.} =
   ## Removes item from list.
   item[].next[].prev = item[].prev
   item[].prev[].next = item[].next
