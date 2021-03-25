@@ -78,7 +78,7 @@ proc deleteVertex(pt: var Polytope, v: ptr PolytopeVertex) {.inline.} =
   # delete vertex from main list
   delete(addr v[].list)
 
-  if pointer(pt.nearest) == pointer(v): pt.nearest = nil
+  if pt.nearest == v: pt.nearest = nil
 
   c_free(v)
 
@@ -93,7 +93,7 @@ proc deleteEdge*(pt: var Polytope, e: ptr PolytopeEdge) {.inline.} =
   # disconnect edge from main list
   delete(addr e[].list)
 
-  if pointer(pt.nearest) == pointer(e): pt.nearest = nil
+  if pt.nearest == e: pt.nearest = nil
 
   c_free(e)
 
@@ -107,7 +107,7 @@ proc deleteFace*(pt: var Polytope, f: ptr PolytopeFace) {.inline.} =
   # remove face from list of all faces
   delete(addr f[].list)
 
-  if pointer(pt.nearest) == pointer(f): pt.nearest = nil
+  if pt.nearest == f: pt.nearest = nil
 
   c_free(f)
 
