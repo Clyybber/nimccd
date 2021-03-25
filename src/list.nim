@@ -25,22 +25,22 @@ template prefetch*(x) = discard # TODO
   #  define _ccd_prefetch(x) ((void)0)
   #  define _ccd_prefetchw(x) ((void)0)
 
-type DLList* = object
-  next*, prev*: ptr DLList
+type EmbeddedList* = object
+  next*, prev*: ptr EmbeddedList
 
 template entry(
-    p,     # the &DLList pointer.
-    typ,   # the type of the struct this is embedded in.
-    member # the name of the list_struct within the struct.
+    p,     # the head of the embedded list.
+    typ,   # the type of the struct this list is embedded in.
+    member # the name of the embedded list within the struct.
   ): untyped =
   ## Get the struct for this entry.
   cast[ptr typ](cast[uint64](p) - cast[uint64](offsetof(typ, member)))
 
 template forEachEntry*(
-    head,    # the head for your list.
-    pos,     # the type * to use as a loop cursor.
-    postype,
-    member,  # the name of the list_struct within the struct.
+    head,    # the head of the embedded list.
+    pos,     # the location to use as a loop cursor.
+    postype, # the type of the structs this list is embedded in.
+    member,  # the name of the embedded list within the struct.
     XXX: untyped) =
   ## Iterates over list of given type.
   block:
@@ -50,13 +50,13 @@ template forEachEntry*(
       pos = entry(pos[].member.next, postype, member)
 
 template forEachEntrySafe*(
-    head,    # the head for your list.
-    pos,     # the type * to use as a loop cursor.
-    n,       # another type * to use as temporary storage
-    postype,
-    member,  # the name of the list_struct within the struct.
+    head,    # the head of the embedded list.
+    pos,     # the location to use as a loop cursor.
+    n,       # the location to use as temporary storage.
+    postype, # the type of the structs this list is embedded in.
+    member,  # the name of the embedded list within the struct.
     XXX: untyped) =
-  ## Iterates over list of given type safe against removal of list entry
+  ## Iterates over list of given type, safe against removal of list entry
   block:
     var pos = entry(head[].next, postype, member);
     var n = entry(pos[].member.next, postype, member);
@@ -64,23 +64,23 @@ template forEachEntrySafe*(
       XXX
       pos = n; n = entry(n[].member.next, postype, member)
 
-proc initList*(l: ptr DLList) {.inline.} =
+proc initList*(l: ptr EmbeddedList) {.inline.} =
   ## Initialize list.
   l[].next = l
   l[].prev = l
 
-proc isEmpty*(head: ptr DLList): bool {.inline.} =
+proc isEmpty*(head: ptr EmbeddedList): bool {.inline.} =
   ## Returns true if list is empty.
   head[].next == head
 
-proc append*(l, new: ptr DLList) {.inline.} =
+proc append*(l, new: ptr EmbeddedList) {.inline.} =
   ## Appends item to end of the list l.
   new[].prev = l[].prev
   new[].next = l
   l[].prev[].next = new
   l[].prev = new
 
-proc delete*(item: ptr DLList) {.inline.} =
+proc delete*(item: ptr EmbeddedList) {.inline.} =
   ## Removes item from list.
   item[].next[].prev = item[].prev
   item[].prev[].next = item[].next
