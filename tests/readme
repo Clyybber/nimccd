@@ -1,0 +1,2 @@
+libccdOutput houses the actual test output of the libccd on my machine with double precision.
+We compare the output of the Nim version against this during testing (see test.sh).
