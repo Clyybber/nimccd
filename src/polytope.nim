@@ -26,45 +26,45 @@ type
     typ*: PolytopeElementKind     ## type of element
     dist*: R                ## distance from origin
     witness*: Vec3[R] ## witness point of projection of origin
-    list: EmbeddedList        ## list of elements of same type
+    list: IntrusiveList        ## list of elements of same type
 
   PolytopeVertex*[R] = object
     ## Polytope's vertex.
     typ*: PolytopeElementKind
     dist*: R
     witness: Vec3[R]
-    list*: EmbeddedList
+    list*: IntrusiveList
 
     id: int
     v*: SupportPoints[R]
-    edges: EmbeddedList # List of edges
+    edges: IntrusiveList # List of edges
 
   PolytopeEdge*[R] = object
     ## Polytope's edge.
     typ*: PolytopeElementKind
     dist: R
     witness: Vec3[R]
-    list: EmbeddedList
+    list: IntrusiveList
 
     vertex: array[2, ptr PolytopeVertex[R]] # Reference to vertices
     faces: array[2, ptr PolytopeFace[R]] # Reference to faces
 
-    vertex_list: array[2, EmbeddedList] # List items in vertices' lists
+    vertex_list: array[2, IntrusiveList] # List items in vertices' lists
 
   PolytopeFace*[R] = object
     ## Polytope's triangle faces.
     typ*: PolytopeElementKind
     dist: R
     witness: Vec3[R]
-    list: EmbeddedList
+    list: IntrusiveList
 
     edge: array[3, ptr PolytopeEdge[R]] # Reference to surrounding edges
 
   Polytope*[R] = object
     ## Struct containing polytope.
-    vertices*: EmbeddedList ## List of vertices
-    edges: EmbeddedList     ## List of edges
-    faces: EmbeddedList     ## List of faces
+    vertices*: IntrusiveList ## List of vertices
+    edges: IntrusiveList     ## List of edges
+    faces: IntrusiveList     ## List of faces
 
     nearest: ptr PolytopeElement[R]
     nearest_dist: R

@@ -25,8 +25,8 @@ template prefetch*(x) = discard # TODO
   #  define _ccd_prefetch(x) ((void)0)
   #  define _ccd_prefetchw(x) ((void)0)
 
-type EmbeddedList* = object
-  next*, prev*: ptr EmbeddedList
+type IntrusiveList* = object
+  next*, prev*: ptr IntrusiveList
 
 template entry(
     p,     # the head of the embedded list.
@@ -64,23 +64,23 @@ template forEachEntrySafe*(
       XXX
       pos = n; n = entry(n[].member.next, postype, member)
 
-proc initList*(l: ptr EmbeddedList) {.inline.} =
+proc initList*(l: ptr IntrusiveList) {.inline.} =
   ## Initialize list.
   l[].next = l
   l[].prev = l
 
-proc isEmpty*(head: ptr EmbeddedList): bool {.inline.} =
+proc isEmpty*(head: ptr IntrusiveList): bool {.inline.} =
   ## Returns true if list is empty.
   head[].next == head
 
-proc append*(l, new: ptr EmbeddedList) {.inline.} =
+proc append*(l, new: ptr IntrusiveList) {.inline.} =
   ## Appends item to end of the list l.
   new[].prev = l[].prev
   new[].next = l
   l[].prev[].next = new
   l[].prev = new
 
-proc delete*(item: ptr EmbeddedList) {.inline.} =
+proc delete*(item: ptr IntrusiveList) {.inline.} =
   ## Removes item from list.
   item[].next[].prev = item[].prev
   item[].prev[].next = item[].next
